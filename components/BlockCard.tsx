@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Block } from '../types';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Copy, Check } from 'lucide-react';
 
 interface BlockCardProps {
   block: Block;
@@ -10,6 +10,15 @@ interface BlockCardProps {
 }
 
 const HashDisplay = ({ label, hash, isGenesis = false }: { label: string; hash: string; isGenesis?: boolean }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(hash);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="relative group">
       {/* Normal View (Truncated) */}
@@ -23,10 +32,21 @@ const HashDisplay = ({ label, hash, isGenesis = false }: { label: string; hash: 
       {/* Hover Popup (Full Hash) */}
       {!isGenesis && (
         <div className="hidden group-hover:block absolute top-0 left-0 w-[110%] -ml-[5%] z-20 bg-slate-800 border border-emerald-500/50 rounded p-3 shadow-2xl animate-in fade-in duration-100">
-          <label className="text-[10px] uppercase text-emerald-400 font-bold mb-1 block flex justify-between">
-             {label}
-             <span className="text-[8px] text-emerald-600 border border-emerald-800 px-1 rounded">FULL</span>
-          </label>
+          <div className="flex justify-between items-center mb-1">
+             <label className="text-[10px] uppercase text-emerald-400 font-bold flex items-center gap-2">
+                {label}
+             </label>
+             <div className="flex items-center gap-2">
+                 <span className="text-[8px] text-emerald-600 border border-emerald-800 px-1 rounded">FULL</span>
+                 <button 
+                    onClick={handleCopy}
+                    className="text-emerald-500 hover:text-emerald-300 transition-colors p-1 hover:bg-emerald-900/30 rounded"
+                    title="Copy full hash"
+                 >
+                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                 </button>
+             </div>
+          </div>
           <div className="text-[10px] font-mono text-white break-all leading-relaxed bg-black/30 p-1 rounded border border-white/5">
             {hash}
           </div>

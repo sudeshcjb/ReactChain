@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WalletKeys, Transaction } from '../types';
 import { generateKeyPair, signData } from '../services/cryptoService';
-import {  Send, Wallet, RefreshCw, Copy, Check, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import {  Send, Wallet, RefreshCw, Copy, Check, TrendingUp, TrendingDown, Activity, ShieldCheck } from 'lucide-react';
 
 interface WalletViewProps {
   wallet: WalletKeys | null;
@@ -24,6 +24,7 @@ const WalletView: React.FC<WalletViewProps> = ({
   const [amount, setAmount] = useState('10');
   const [copied, setCopied] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const createWallet = async () => {
     const keys = await generateKeyPair();
@@ -32,8 +33,15 @@ const WalletView: React.FC<WalletViewProps> = ({
     setWallet({ ...keys, address });
   };
 
-  const handleSend = async () => {
+  const handleInitiateSend = () => {
     if (!wallet || !amount || !recipient) return;
+    setShowConfirmModal(true);
+  };
+
+  const confirmSend = async () => {
+    if (!wallet || !amount || !recipient) return;
+    
+    setShowConfirmModal(false);
     setIsSigning(true);
     
     try {
@@ -106,7 +114,7 @@ const WalletView: React.FC<WalletViewProps> = ({
   }
 
   return (
-    <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-6 flex flex-col h-full overflow-y-auto">
+    <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-6 flex flex-col h-full overflow-y-auto relative">
       <div className="flex justify-between items-start mb-6 shrink-0">
         <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -187,13 +195,62 @@ const WalletView: React.FC<WalletViewProps> = ({
         </div>
 
         <button 
-            onClick={handleSend}
+            onClick={handleInitiateSend}
             disabled={!recipient || !amount || isSigning || parseFloat(amount) <= 0 || parseFloat(amount) > balance}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
         >
             {isSigning ? 'Signing...' : <><Send size={18} /> Sign & Send Transaction</>}
         </button>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="absolute inset-0 z-10 bg-slate-900/95 backdrop-blur-sm rounded-2xl flex items-center justify-center p-6 animate-in fade-in duration-200">
+            <div className="w-full space-y-4">
+                <div className="text-center mb-6">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3 text-emerald-400">
+                        <ShieldCheck size={24} />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">Confirm Transaction</h3>
+                    <p className="text-xs text-slate-400 mt-1">Review details before signing</p>
+                </div>
+
+                <div className="space-y-3 bg-black/20 p-4 rounded-xl border border-slate-700/50">
+                    <div>
+                        <label className="text-[10px] uppercase text-slate-500 font-bold mb-1">Recipient</label>
+                        <div className="text-xs font-mono text-slate-300 break-all bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                            {recipient}
+                        </div>
+                    </div>
+                    <div className="flex justify-between items-end">
+                         <div>
+                            <label className="text-[10px] uppercase text-slate-500 font-bold mb-1">Amount</label>
+                            <div className="text-xl font-bold text-emerald-400">{amount} COIN</div>
+                         </div>
+                         <div className="text-right">
+                             <label className="text-[10px] uppercase text-slate-500 font-bold mb-1">Fee</label>
+                             <div className="text-xs text-slate-400">0.00 COIN</div>
+                         </div>
+                    </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                    <button 
+                        onClick={() => setShowConfirmModal(false)}
+                        className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors text-xs"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={confirmSend}
+                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-emerald-900/20 text-xs flex items-center justify-center gap-2"
+                    >
+                        <Send size={14} /> Confirm & Sign
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
