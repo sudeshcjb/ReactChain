@@ -55,17 +55,35 @@ export class Blockchain {
     if (!transaction.signature) {
       throw new Error('No signature in transaction');
     }
+    if (transaction.amount <= 0) {
+      throw new Error('Transaction amount must be higher than 0');
+    }
+    // Basic validation to prevent negative fees
+    if (transaction.fee < 0) {
+        throw new Error('Transaction fee cannot be negative');
+    }
+    
+    // Check balance
+    const balance = this.getBalanceOfAddress(transaction.sender);
+    if (balance < transaction.amount + transaction.fee) {
+        throw new Error('Insufficient balance to cover amount + fee');
+    }
+
     this.pendingTransactions.push(transaction);
   }
 
   // Mine pending transactions
   // This is a generator function to allow the UI to show progress without blocking
   async *minePendingTransactions(minerAddress: string): AsyncGenerator<{ nonce: number; currentHash: string; found: boolean }, Block, unknown> {
+    // Calculate total fees
+    const totalFees = this.pendingTransactions.reduce((acc, tx) => acc + (tx.fee || 0), 0);
+    
     const rewardTx: Transaction = {
       id: crypto.randomUUID(),
       sender: 'SYSTEM',
       recipient: minerAddress,
-      amount: this.miningReward,
+      amount: this.miningReward + totalFees, // Base Reward + Fees
+      fee: 0,
       timestamp: Date.now(),
       signature: 'SYSTEM_REWARD',
     };
@@ -128,7 +146,8 @@ export class Blockchain {
         // Skip system reward transactions as they are not signed by a wallet
         if (tx.sender === 'SYSTEM') continue;
 
-        const dataToVerify = tx.sender + tx.recipient + tx.amount + tx.timestamp;
+        // Data string must include fee now
+        const dataToVerify = tx.sender + tx.recipient + tx.amount + tx.fee + tx.timestamp;
         const isValidSignature = await verifySignature(tx.sender, tx.signature, dataToVerify);
 
         if (!isValidSignature) {
@@ -159,7 +178,7 @@ export class Blockchain {
     for (const block of this.chain) {
       for (const trans of block.transactions) {
         if (trans.sender === address) {
-          balance -= trans.amount;
+          balance -= (trans.amount + trans.fee); // Deduct amount AND fee
         }
         if (trans.recipient === address) {
           balance += trans.amount;
@@ -170,7 +189,7 @@ export class Blockchain {
     // Check pending transactions for spending
     for (const trans of this.pendingTransactions) {
         if (trans.sender === address) {
-            balance -= trans.amount;
+            balance -= (trans.amount + trans.fee);
         }
     }
 
@@ -201,6 +220,7 @@ export class Blockchain {
                  sender: 'HACKER',
                  recipient: 'HACKER',
                  amount: 1000000,
+                 fee: 0,
                  timestamp: Date.now(),
                  signature: 'FAKE_SIG'
              });

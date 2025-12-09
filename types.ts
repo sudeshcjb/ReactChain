@@ -3,6 +3,7 @@ export interface Transaction {
   sender: string; // Public Key
   recipient: string; // Public Key
   amount: number;
+  fee: number;
   timestamp: number;
   signature: string;
 }

@@ -3,8 +3,9 @@ import { Blockchain } from './services/blockchainService';
 import { Block, Transaction, WalletKeys, AppStatus } from './types';
 import BlockCard from './components/BlockCard';
 import WalletView from './components/WalletView';
-import { Pickaxe, Box, Activity, ShieldCheck, Cpu, ArrowRight, Zap, CheckCircle, XCircle, RefreshCw, Settings, AlertTriangle, Hammer, Repeat, Hash, ArrowDownLeft, ArrowUpRight, Search } from 'lucide-react';
+import { Pickaxe, Box, Activity, ShieldCheck, Cpu, ArrowRight, Zap, CheckCircle, XCircle, RefreshCw, Settings, AlertTriangle, Hammer, Repeat, Hash, ArrowDownLeft, ArrowUpRight, Search, ShieldAlert, Coins } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { verifySignature } from './services/cryptoService';
 
 // Instantiate Blockchain logic outside component to persist state across re-renders (in a real app, use Context)
 const blockchain = new Blockchain();
@@ -25,6 +26,8 @@ function App() {
   
   // Search State
   const [txSearchTerm, setTxSearchTerm] = useState('');
+  // Transaction Validity State for UI Highlighting
+  const [txValidity, setTxValidity] = useState<Record<string, boolean>>({});
   
   // Settings State
   const [difficulty, setDifficulty] = useState(2);
@@ -47,6 +50,31 @@ function App() {
       setBalance(bal);
     }
   }, [chain, pendingTransactions, wallet]);
+
+  // Check transaction validity when selected block changes
+  useEffect(() => {
+    const checkSelectedBlockSignatures = async () => {
+        if (!selectedBlock) {
+            setTxValidity({});
+            return;
+        }
+        
+        const validity: Record<string, boolean> = {};
+        for (const tx of selectedBlock.transactions) {
+            if (tx.sender === 'SYSTEM') {
+                validity[tx.id] = true;
+                continue;
+            }
+            // Include fee in verification
+            const dataToVerify = tx.sender + tx.recipient + tx.amount + tx.fee + tx.timestamp;
+            const isValid = await verifySignature(tx.sender, tx.signature, dataToVerify);
+            validity[tx.id] = isValid;
+        }
+        setTxValidity(validity);
+    };
+    
+    checkSelectedBlockSignatures();
+  }, [selectedBlock]);
 
   const handleTransaction = (tx: Transaction) => {
       try {
@@ -121,7 +149,8 @@ function App() {
                 transactions: selectedBlock.transactions.map(t => ({
                     from: t.sender.substring(0, 20) + '...',
                     to: t.recipient.substring(0, 20) + '...',
-                    amount: t.amount
+                    amount: t.amount,
+                    fee: t.fee
                 }))
             }, null, 2)}
         `;
@@ -171,7 +200,8 @@ function App() {
           blockchain.corruptBlock(selectedBlock.index);
           // Force update chain state
           setChain([...blockchain.chain]);
-          setSelectedBlock({...blockchain.chain[selectedBlock.index]}); // Refresh selected view
+          const updatedBlock = {...blockchain.chain[selectedBlock.index]};
+          setSelectedBlock(updatedBlock); // Refresh selected view
           
           // Clear previous validation status so user has to click validate again to see the error
           setValidationResult(null);
@@ -224,6 +254,11 @@ function App() {
   const isMe = useCallback((address: string) => {
       return wallet && address === wallet.publicKeyPem;
   }, [wallet]);
+
+  // Calculate pending fees
+  const pendingFees = useMemo(() => {
+      return pendingTransactions.reduce((acc, tx) => acc + (tx.fee || 0), 0);
+  }, [pendingTransactions]);
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row text-slate-200 overflow-hidden">
@@ -313,7 +348,7 @@ function App() {
                 )}
                 <div className="mt-2 text-[10px] text-slate-500 flex justify-between">
                     <span>Pending TXs: {pendingTransactions.length}</span>
-                    <span>Reward: {reward}</span>
+                    <span>Reward: {reward} + <span className="text-amber-400">{pendingFees} Fees</span></span>
                 </div>
             </div>
 
@@ -339,7 +374,7 @@ function App() {
                     </div>
                      <div>
                         <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                            <span>Mining Reward</span>
+                            <span>Base Mining Reward</span>
                             <span className="text-white font-mono">{reward}</span>
                         </div>
                         <input 
@@ -536,24 +571,35 @@ function App() {
                         {filteredTransactions.map((tx) => {
                             const sentByMe = isMe(tx.sender);
                             const receivedByMe = isMe(tx.recipient);
+                            const isInvalid = txValidity[tx.id] === false;
                             
                             return (
                                 <div key={tx.id} className={`p-3 rounded border transition-colors ${
+                                    isInvalid ? 'bg-red-900/20 border-red-500/50' :
                                     sentByMe ? 'bg-amber-900/10 border-amber-800/50' :
                                     receivedByMe ? 'bg-emerald-900/10 border-emerald-800/50' :
                                     'bg-slate-900 border-slate-700/50'
                                 }`}>
                                     <div className="flex justify-between items-start mb-1">
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 items-center">
                                             <span className={`text-[10px] px-1.5 rounded flex items-center gap-1 ${tx.sender === 'SYSTEM' ? 'bg-blue-900 text-blue-300' : 'bg-slate-700 text-slate-300'}`}>
                                                 {tx.sender === 'SYSTEM' ? 'MINING REWARD' : 'TRANSFER'}
                                             </span>
                                             {sentByMe && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 rounded flex items-center gap-1 font-bold"><ArrowUpRight size={10} /> SENT</span>}
                                             {receivedByMe && <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 rounded flex items-center gap-1 font-bold"><ArrowDownLeft size={10} /> RECEIVED</span>}
+                                            
+                                            {isInvalid && (
+                                                <span className="text-[10px] bg-red-600 text-white px-1.5 rounded flex items-center gap-1 font-bold animate-pulse">
+                                                    <ShieldAlert size={10} /> INVALID SIGNATURE
+                                                </span>
+                                            )}
                                         </div>
-                                        <span className="text-emerald-400 font-mono text-sm font-bold">
-                                            {tx.amount} COIN
-                                        </span>
+                                        <div className="text-right">
+                                            <span className={`${isInvalid ? 'text-red-400' : 'text-emerald-400'} font-mono text-sm font-bold block`}>
+                                                {tx.amount} COIN
+                                            </span>
+                                            {tx.fee > 0 && <span className="text-[9px] text-slate-500 block">Fee: {tx.fee}</span>}
+                                        </div>
                                     </div>
                                     <div className="space-y-1 mt-2">
                                         <div className="flex gap-2 text-[10px]">
@@ -570,7 +616,7 @@ function App() {
                                         </div>
                                         <div className="flex gap-2 text-[10px]">
                                             <span className="text-slate-500 w-10">Sign:</span>
-                                            <span className="font-mono text-slate-600 truncate w-48">{tx.signature.substring(0, 20)}...</span>
+                                            <span className={`font-mono truncate w-48 ${isInvalid ? 'text-red-400 line-through decoration-red-500' : 'text-slate-600'}`}>{tx.signature.substring(0, 20)}...</span>
                                         </div>
                                     </div>
                                 </div>
