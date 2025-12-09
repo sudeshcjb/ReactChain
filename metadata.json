@@ -1,0 +1,5 @@
+{
+  "name": "ReactChain Visualizer T1U1",
+  "description": "A fully functional, client-side Blockchain simulation. Features real-time Proof of Work mining, ECDSA digital signatures, wallet management, and an interactive block explorer. Built to demonstrate cryptographic principles visually.",
+  "requestFramePermissions": []
+}
